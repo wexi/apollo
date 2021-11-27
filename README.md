@@ -2,10 +2,12 @@
 
 # General
 
-apollo.py is a Linux script that helps to select/play [Apollo Group TV](https://apollogroup.tv/)
-m3u8 content for the [VLC media player](https://www.videolan.org/). Your personal details and your
-live TV channels of interest go into local.py. venus.sh is a shell script
-that helps to locate TV Series. See [What are the M3U & EPG urls](https://help.apollogroup.tv/support/solutions/articles/48000589710-what-are-the-m3u-epg-urls-sports-vod-url-included-).
+**apollo.py** is a Linux script that helps to select/play [Apollo Group TV](https://apollogroup.tv/)
+IPTV m3u8 content for/by the [VLC media player](https://www.videolan.org/). Your apollo subscription
+details and your live TV channels of interest go into local.py.
+
+venus.sh is a shell script that helps to locate TV Series.
+See Apollo Group article: [What are the M3U & EPG urls](https://help.apollogroup.tv/support/solutions/articles/48000589710-what-are-the-m3u-epg-urls-sports-vod-url-included-).
 
 
 # Usage
@@ -38,7 +40,7 @@ By default the selected m3u8 lists are written to:
     1: Gone with the Wind (1939)
     Search "gone with the wind": #1
 
-    venus humans -y 2015
+    $ venus humans -y 2015
     NOT FOUND: "humans/1" -y 2015
     NOT FOUND: "humans/2" -y 2015
     NOT FOUND: "humans/3" -y 2015
