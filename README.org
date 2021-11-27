@@ -2,10 +2,12 @@
 
 * General
 
-  apollo.py is a Linux script that helps to select/play [[https://apollogroup.tv/][Apollo Group TV]]
-  m3u8 content for/by the [[https://www.videolan.org/][VLC media player]]. Your personal details and your
-  live TV channels of interest go into local.py. venus.sh is a shell script
-  that helps to locate TV Series. See [[https://help.apollogroup.tv/support/solutions/articles/48000589710-what-are-the-m3u-epg-urls-sports-vod-url-included-][What are the M3U & EPG urls]].
+  *apollo.py* is a Linux script that helps to select/play [[https://apollogroup.tv/][Apollo Group TV]]
+  IPTV m3u8 content for/by the [[https://www.videolan.org/][VLC media player]]. Your apollo subscription
+  details and your live TV channels of interest go into local.py.
+
+  venus.sh is a shell script that helps to locate TV Series.
+  See Apollo Group article: [[https://help.apollogroup.tv/support/solutions/articles/48000589710-what-are-the-m3u-epg-urls-sports-vod-url-included-][What are the M3U & EPG urls]].
 
 * Usage
 
