@@ -64,7 +64,7 @@ if arg.ping:
     else:
         print('Best server:', server, 'delay (ms):', delay)
 else:
-    server = servers[0]
+    server = SERVERS[0]
 
 apollo = 'https://' + server + APOLLO
 
