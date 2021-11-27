@@ -5,7 +5,10 @@ APOLLO = '/api/list/YOUR_EMAIL/PASSWORD/m3u8/'
 # TV stations of interest:
 TVLIVE = (r'(Science US)$', r'(FOX News US)$',
           r'(NewsMax TV)$', r'(One America News Network)$',
-          r'(BBC World North America US)$', r'(sky.news.uk.png)')
+          r'(BBC World North America US)$', r'(sky.news.uk.png)', r'(i24)$',
+          r'(Channel 11 Kan)$', r'(Channel 12 Keset)$',
+          r'(Channel 13 Reshet)$', r'(Channel 20)$',
+          r'(Knesset)$', r'(music.il.png)')
 
 # M3U8 lists directory:
 DIR = 'Desktop', 'VLC'
