@@ -110,10 +110,10 @@ names = set()
 with wlist.open('rt') as fi:
     with mlist.open('wt') as fo:
         line = fi.readline()
-        if line.startswith('#EXTM3U'):
+        if line.lstrip().startswith('#EXTM3U'):
             fo.write(line)
             while line:
-                if line.startswith('#EXTINF'):
+                if line.lstrip().startswith('#EXTINF'):
                     ss = Search.search(line)
                     if ss:
                         name = ss.group(0)
