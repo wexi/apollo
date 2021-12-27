@@ -3,7 +3,7 @@ SERVERS = 'tv4.live', 'tvnow.best'
 APOLLO = '/api/list/YOUR_EMAIL/PASSWORD/m3u8/'
 
 # TV stations of interest:
-TVLIVE = (r'(Science US)$', r'(FOX News US)$',
+TVLIVE = (r'(Science US)$', r'(FOX News US)$', r'(FOX Business Network)$',
           r'(NewsMax TV)$', r'(One America News Network)$',
           r'(BBC World North America US)$', r'(sky.news.uk.png)', r'(i24)$',
           r'(Channel 11 Kan)$', r'(Channel 12 Keset)$',
