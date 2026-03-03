@@ -8,7 +8,13 @@ import pathlib
 import re
 import subprocess
 import sys
+from urllib.parse import urljoin
+from urllib.request import Request, urlopen
+
 from local import SERVERS, APOLLO, TVLIVE, DIR
+
+
+DOWNLOAD_SUBDIR = 'downloads'
 
 
 class Action(argparse.Action):
@@ -20,6 +26,86 @@ class Action(argparse.Action):
             values += '/1'
             setattr(namespace, 'media', 'tvshows/' + values.split('/')[1])
             setattr(namespace, self.dest, values.split('/')[0])
+
+
+def sanitize_filename(name):
+    sanitized = re.sub(r'[^\w .()\-]+', '_', name).strip()
+    return sanitized.rstrip('.') or 'apollo_download'
+
+
+def parse_m3u_attributes(line):
+    attrs = {}
+    for key, value in re.findall(r'([A-Z0-9\-]+)=((?:"[^"]*")|[^,]+)', line):
+        attrs[key] = value.strip('"')
+    return attrs
+
+
+def discover_subtitles(stream_url, debug=False):
+    req = Request(stream_url, headers={'User-Agent': 'apollo.py'})
+    try:
+        with urlopen(req, timeout=10) as response:
+            # Stream endpoints may be long-running; only sample the prefix.
+            blob = response.read(262144)
+    except Exception as err:  # network/parsing issues should not break download
+        if debug:
+            print('Subtitle discovery failed:', err, file=sys.stderr)
+        return []
+
+    text = blob.decode('utf-8', errors='replace')
+    if '#EXT' not in text:
+        return []
+
+    subtitles = []
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith('#EXT-X-MEDIA') and 'TYPE=SUBTITLES' in line:
+            attrs = parse_m3u_attributes(line)
+            uri = attrs.get('URI')
+            if uri:
+                subtitles.append({
+                    'language': attrs.get('LANGUAGE', ''),
+                    'name': attrs.get('NAME', ''),
+                    'uri': urljoin(stream_url, uri),
+                })
+    return subtitles
+
+
+def download_stream(name, stream_url, outdir, debug=False):
+    dl_dir = outdir.joinpath(DOWNLOAD_SUBDIR)
+    dl_dir.mkdir(exist_ok=True)
+
+    base = sanitize_filename(name)
+    target = dl_dir.joinpath(base + '.mkv')
+
+    subtitles = discover_subtitles(stream_url, debug=debug)
+    if subtitles:
+        subfile = dl_dir.joinpath(base + '.subtitles.txt')
+        with subfile.open('wt') as fo:
+            for i, sub in enumerate(subtitles, 1):
+                label = sub['name'] or 'unnamed'
+                lang = sub['language'] or 'unknown'
+                fo.write(f"{i}. {label} [{lang}] {sub['uri']}\n")
+        print('Subtitles:', len(subtitles), 'track(s) listed in', subfile)
+    else:
+        print('Subtitles: none discovered in the stream manifest')
+
+    args = [
+        'ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'warning', '-stats',
+        '-n', '-i', stream_url,
+        '-map', '0', '-c', 'copy', str(target)
+    ]
+    try:
+        subprocess.run(args, check=True)
+    except FileNotFoundError:
+        print('ffmpeg command not found', file=sys.stderr)
+        return False
+    except subprocess.CalledProcessError as err:
+        print('ffmpeg download failed with exit code', err.returncode,
+              file=sys.stderr)
+        return False
+
+    print('Downloaded:', target)
+    return True
 
 
 parser = argparse.ArgumentParser()
@@ -35,6 +121,8 @@ parser.add_argument('-y', dest='year', metavar='YEAR',
                     help='Movie or TV Show (YEAR)')
 parser.add_argument('word', nargs='*', help='Movie title, case ignored')
 parser.add_argument('--wget', action='store_true', help='Preserve wget.m3u8')
+parser.add_argument('--download', action='store_true',
+                    help='Download only if exactly one matched stream is found')
 parser.add_argument('--debug', action='store_true',
                     help='Print network/debug details to stderr')
 arg = parser.parse_args()
@@ -108,9 +196,9 @@ servers = [server] + [s for s in SERVERS if s != server]
 for server in servers:
     apollo = 'https://' + server + APOLLO
     try:
-        wget = subprocess.run(['wget', '-O', wlist, apollo + media],
-                              stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-                              timeout=10, check=True)
+        subprocess.run(['wget', '-O', wlist, apollo + media],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                       timeout=10, check=True)
     except FileNotFoundError:
         print('wget command not found', file=sys.stderr)
         exit(2)
@@ -131,6 +219,7 @@ else:
     exit(2)
 
 names = set()
+matches = []
 with wlist.open('rt') as fi:
     with mlist.open('wt') as fo:
         line = fi.readline()
@@ -138,20 +227,39 @@ with wlist.open('rt') as fi:
             fo.write(line)
             while line:
                 if line.lstrip().startswith('#EXTINF'):
-                    ss = Search.search(line)
+                    info_line = line
+                    url_line = fi.readline()
+                    if not url_line:
+                        break
+
+                    ss = Search.search(info_line)
                     if ss:
                         name = ss.group(0)
                         if video or name not in names:
                             names.add(name)
-                            fo.write(line)
-                            line = fi.readline()
-                            fo.write(line)
-                line = fi.readline()
+                            fo.write(info_line)
+                            fo.write(url_line)
+                            matches.append((name, url_line.strip()))
+                    line = fi.readline()
+                else:
+                    line = fi.readline()
 
+exit_code = 0
 if names:
     if video:                   # not livetv
         for i, name in enumerate(sorted(names), 1):
             print(i, name, sep=': ')
+
+    if arg.download:
+        if len(matches) != 1:
+            print('Ambiguous: found', len(matches),
+                  'matching streams. Refine your search to one result.')
+            exit_code = 1
+        else:
+            ok = download_stream(matches[0][0], matches[0][1], outdir,
+                                 debug=arg.debug)
+            if not ok:
+                exit_code = 2
 
     if arg.exec:
         try:
@@ -166,6 +274,7 @@ if names:
 
 else:
     mlist.unlink()              # search failed
+    exit_code = 1
 
 if not arg.wget:
     wlist.unlink()
@@ -173,4 +282,4 @@ if not arg.wget:
 if arg.ping:                    # since venus runs with no fping
     print('TV channels' if video is None else 'Search "' + video + '"',
           len(names), sep=': #')
-exit(len(names) == 0)
+exit(exit_code)
