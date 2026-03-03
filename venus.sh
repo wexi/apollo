@@ -3,6 +3,11 @@
 
 COUNTER=1
 until apollo -p 0 -t "${1}/${COUNTER}" ${2} ${3}; do
+    STATUS=$?
+    if (( STATUS >= 2 )); then
+        echo apollo failed with status ${STATUS}
+        exit "${STATUS}"
+    fi
     echo NOT FOUND: \"${1}/${COUNTER}\" ${2} ${3}
     (( COUNTER++ ))
 done

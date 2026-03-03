@@ -7,6 +7,7 @@ import argparse
 import pathlib
 import re
 import subprocess
+import sys
 from local import SERVERS, APOLLO, TVLIVE, DIR
 
 
@@ -34,39 +35,43 @@ parser.add_argument('-y', dest='year', metavar='YEAR',
                     help='Movie or TV Show (YEAR)')
 parser.add_argument('word', nargs='*', help='Movie title, case ignored')
 parser.add_argument('--wget', action='store_true', help='Preserve wget.m3u8')
+parser.add_argument('--debug', action='store_true',
+                    help='Print network/debug details to stderr')
 arg = parser.parse_args()
 
 if arg.ping:
+    args = ['fping', '-aeqc', "{}".format(arg.ping)]
+    args.extend(SERVERS)
     try:
-        args = ['fping', '-aeqc', "{}".format(arg.ping)]
-        args.extend(SERVERS)
         fping = subprocess.run(
             args,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
-            timeout=arg.ping+3, check=True)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        exit(0)
-    else:
-        pings = fping.stderr.decode('utf-8').split('\n', -1)
-        servers = []
+            timeout=arg.ping+3, check=False)
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        if arg.debug:
+            print('fping failed:', e, file=sys.stderr)
+        fping = None
+
+    servers = []
+    if fping is not None:
+        pings = fping.stderr.decode('utf-8', errors='replace').splitlines()
         for ping in pings:
-            ma = re.match(r'^(\S+).+max =[^/]+/([^/]+)/', ping)
+            ma = re.match(r'^(\S+)\s*:.*min/avg/max = [^/]+/([^/]+)/', ping)
             if ma is None:
-                break
+                continue
             servers.append((float(ma.group(2)), ma.group(1)))
 
-    try:
+    if servers:
         delay, server = min(servers)
-    except ValueError:
-        print('NO REACHABLE SERVER')
-        exit(1)
-    else:
         print('Best server:', server, 'delay (ms):', delay)
+    else:
+        server = SERVERS[0]
+        if arg.debug:
+            print('No fping-selected server; using default:', server,
+                  file=sys.stderr)
 else:
     server = SERVERS[0]
-
-apollo = 'https://' + server + APOLLO
 
 if arg.video is None:           # Action never called (not -m or -t)
     if arg.word:
@@ -94,17 +99,36 @@ else:
         r'$' if media.startswith('m') else r'\sS\d\d\sE\d\d$')
     Search = re.compile(SEARCH, re.IGNORECASE)
 
-dir = pathlib.Path.home().joinpath(*DIR)
-dir.mkdir(exist_ok=True)
-wlist = dir.joinpath('wget.m3u8')
-mlist = dir.joinpath(media.rsplit('/', 1)[0] + '.m3u8')
+outdir = pathlib.Path.home().joinpath(*DIR)
+outdir.mkdir(exist_ok=True)
+wlist = outdir.joinpath('wget.m3u8')
+mlist = outdir.joinpath(media.rsplit('/', 1)[0] + '.m3u8')
 
-try:
-    subprocess.run(['wget', '-O', wlist, apollo + media],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                   timeout=10, check=True)
-except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-    exit(0)                     # ends venus loop
+servers = [server] + [s for s in SERVERS if s != server]
+for server in servers:
+    apollo = 'https://' + server + APOLLO
+    try:
+        wget = subprocess.run(['wget', '-O', wlist, apollo + media],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                              timeout=10, check=True)
+    except FileNotFoundError:
+        print('wget command not found', file=sys.stderr)
+        exit(2)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        if arg.debug:
+            stderr = (e.stderr.decode('utf-8', errors='replace').strip()
+                      if hasattr(e, 'stderr') and e.stderr else str(e))
+            if stderr:
+                print('wget failed on', server, ':',
+                      stderr.rsplit('\n', 1)[-1], file=sys.stderr)
+        continue
+    else:
+        if arg.debug and server != servers[0]:
+            print('Using fallback server:', server, file=sys.stderr)
+        break
+else:
+    print('Unable to fetch playlist from configured servers', file=sys.stderr)
+    exit(2)
 
 names = set()
 with wlist.open('rt') as fi:
@@ -137,7 +161,7 @@ if names:
                               mlist.as_uri()],
                              stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL)
-        except subprocess.CalledProcessError as e:
+        except OSError as e:
             print('vlc', e)
 
 else:
