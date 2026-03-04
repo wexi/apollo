@@ -1,14 +1,49 @@
-#+OPTIONS: toc:nil author:nil email:nil
+merge local with #+OPTIONS: toc:nil author:nil email:nil
 
 * General
 
   *apollo.py* is a Linux script that helps to select/play [[https://apollogroup.tv/][Apollo Group TV]]
   IPTV m3u8 content for/by the [[https://www.videolan.org/][VLC media player]]. Your apollo subscription
-  details and your live TV channels of interest go into local.py.
-  Start from local.example.py and keep local.py private (it is gitignored).
+  details and your live TV channels of interest go into local.py (private).
 
   venus.sh is a shell script that helps to locate TV Series.
   See Apollo Group article: [[https://help.apollogroup.tv/support/solutions/articles/48000589710-what-are-the-m3u-epg-urls-sports-vod-url-included-][What are the M3U & EPG urls]].
+
+* local.py Setup
+
+  local.example.py is the tracked template.
+  Each user should create their own local.py from local.example.py.
+  local.py is private, contains secrets, and must not be shared or committed.
+  Only local.example.py should be tracked in Git.
+
+#+begin_example
+$ cp local.example.py local.py
+$ chmod 600 local.py
+#+end_example
+
+Edit local.py fields:
+
+- *SERVERS*:
+  Ordered host list. First host is preferred, next hosts are fallback.
+
+- *APOLLO*:
+  Your account path, usually in this form:
+  /api/list/YOUR_EMAIL/PASSWORD/m3u8/
+  Keep this private.
+
+- *TVLIVE*:
+  Tuple of regex patterns used when you run apollo with no movie/show search.
+  Update this list with your preferred channels.
+
+- *DIR*:
+  Output directory under your home folder for generated playlists and downloads.
+  Example: ('Desktop', 'VLC') -> ~/Desktop/VLC/
+
+Quick validation after editing:
+
+#+begin_example
+$ apollo -p 0
+#+end_example
 
 * Usage
 
