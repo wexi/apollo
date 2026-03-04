@@ -14,7 +14,7 @@
 
 #+begin_example
 $ apollo -h
-usage: apollo [-h] [-m MOVIE_TITLE] [-t TVSHOW_NAME] [-p COUNT] [-x] [-y YEAR] [--wget] [word ...]
+usage: apollo [-h] [-m MOVIE_TITLE] [-t TVSHOW_NAME] [-p COUNT] [-x] [-y YEAR] [--wget] [--download] [--debug] [word ...]
 
 positional arguments:
   word            Movie title, case ignored
@@ -27,6 +27,8 @@ optional arguments:
   -x              Play found playlist
   -y YEAR         Movie or TV Show (YEAR)
   --wget          Preserve wget.m3u8
+  --download      Download exactly one match; saves subtitle tracks when available
+  --debug         Print network/debug details to stderr
 #+end_example
 
 By default the selected m3u8 lists are written to:

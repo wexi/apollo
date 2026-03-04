@@ -40,6 +40,73 @@ def parse_m3u_attributes(line):
     return attrs
 
 
+def download_subtitle_track(uri, target, debug=False):
+    if target.exists():
+        return target
+    alt = target.with_suffix('.srt')
+    if alt.exists():
+        return alt
+
+    args = [
+        'ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'warning',
+        '-n', '-i', uri, '-map', '0', '-c', 'copy', str(target)
+    ]
+    try:
+        subprocess.run(args, check=True)
+        return target
+    except FileNotFoundError:
+        print('ffmpeg command not found', file=sys.stderr)
+        return None
+    except subprocess.CalledProcessError as err:
+        if debug:
+            print('Subtitle copy failed with exit code', err.returncode,
+                  'for', uri, file=sys.stderr)
+
+    # Fallback: convert to plain srt when copy mode is unsupported.
+    args = [
+        'ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'warning',
+        '-n', '-i', uri, '-c:s', 'srt', str(alt)
+    ]
+    try:
+        subprocess.run(args, check=True)
+        return alt
+    except FileNotFoundError:
+        print('ffmpeg command not found', file=sys.stderr)
+        return None
+    except subprocess.CalledProcessError as err:
+        if debug:
+            print('Subtitle conversion failed with exit code', err.returncode,
+                  'for', uri, file=sys.stderr)
+        return None
+
+
+def download_subtitles(base, subtitles, dl_dir, debug=False):
+    subfile = dl_dir.joinpath(base + '.subtitles.txt')
+    downloaded = 0
+
+    with subfile.open('wt') as fo:
+        for i, sub in enumerate(subtitles, 1):
+            label = sub['name'] or 'unnamed'
+            lang = sub['language'] or 'unknown'
+            slug = sanitize_filename('_'.join(
+                p for p in (sub['language'], sub['name']) if p))
+            if not slug:
+                slug = f'track_{i:02d}'
+            slug = slug.replace(' ', '_').lower()
+            target = dl_dir.joinpath(f"{base}.subtitle.{i:02d}.{slug}.vtt")
+
+            fetched = download_subtitle_track(sub['uri'], target, debug=debug)
+            if fetched is None:
+                fo.write(f"{i}. {label} [{lang}] {sub['uri']} -> FAILED\n")
+            else:
+                fo.write(f"{i}. {label} [{lang}] {sub['uri']} -> {fetched}\n")
+                downloaded += 1
+
+    print('Subtitles:', len(subtitles), 'track(s) discovered,', downloaded,
+          'saved, details in', subfile)
+    return downloaded
+
+
 def discover_subtitles(stream_url, debug=False):
     req = Request(stream_url, headers={'User-Agent': 'apollo.py'})
     try:
@@ -78,16 +145,6 @@ def download_stream(name, stream_url, outdir, debug=False):
     target = dl_dir.joinpath(base + '.mkv')
 
     subtitles = discover_subtitles(stream_url, debug=debug)
-    if subtitles:
-        subfile = dl_dir.joinpath(base + '.subtitles.txt')
-        with subfile.open('wt') as fo:
-            for i, sub in enumerate(subtitles, 1):
-                label = sub['name'] or 'unnamed'
-                lang = sub['language'] or 'unknown'
-                fo.write(f"{i}. {label} [{lang}] {sub['uri']}\n")
-        print('Subtitles:', len(subtitles), 'track(s) listed in', subfile)
-    else:
-        print('Subtitles: none discovered in the stream manifest')
 
     args = [
         'ffmpeg', '-nostdin', '-hide_banner', '-loglevel', 'warning', '-stats',
@@ -105,6 +162,10 @@ def download_stream(name, stream_url, outdir, debug=False):
         return False
 
     print('Downloaded:', target)
+    if subtitles:
+        download_subtitles(base, subtitles, dl_dir, debug=debug)
+    else:
+        print('Subtitles: none discovered in the stream manifest')
     return True
 
 
@@ -122,7 +183,8 @@ parser.add_argument('-y', dest='year', metavar='YEAR',
 parser.add_argument('word', nargs='*', help='Movie title, case ignored')
 parser.add_argument('--wget', action='store_true', help='Preserve wget.m3u8')
 parser.add_argument('--download', action='store_true',
-                    help='Download only if exactly one matched stream is found')
+                    help='Download only if exactly one matched stream is found;'
+                    ' also saves subtitle tracks when available')
 parser.add_argument('--debug', action='store_true',
                     help='Print network/debug details to stderr')
 arg = parser.parse_args()
