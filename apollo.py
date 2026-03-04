@@ -4,6 +4,7 @@
 # Use venus[.sh] to search for TV Shows
 #
 import argparse
+import fcntl
 import pathlib
 import re
 import subprocess
@@ -15,6 +16,7 @@ from local import SERVERS, APOLLO, TVLIVE, DIR
 
 
 DOWNLOAD_SUBDIR = 'downloads'
+LOCKFILE_NAME = '.apollo.lock'
 
 
 class Action(argparse.Action):
@@ -137,6 +139,18 @@ def discover_subtitles(stream_url, debug=False):
     return subtitles
 
 
+def acquire_run_lock(lock_path):
+    lock_file = lock_path.open('w')
+    try:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print('Another apollo.py process is already running; try again later.',
+              file=sys.stderr)
+        lock_file.close()
+        return None
+    return lock_file
+
+
 def download_stream(name, stream_url, outdir, debug=False):
     dl_dir = outdir.joinpath(DOWNLOAD_SUBDIR)
     dl_dir.mkdir(exist_ok=True)
@@ -251,6 +265,10 @@ else:
 
 outdir = pathlib.Path.home().joinpath(*DIR)
 outdir.mkdir(exist_ok=True)
+run_lock = acquire_run_lock(outdir.joinpath(LOCKFILE_NAME))
+if run_lock is None:
+    exit(3)
+
 wlist = outdir.joinpath('wget.m3u8')
 mlist = outdir.joinpath(media.rsplit('/', 1)[0] + '.m3u8')
 
